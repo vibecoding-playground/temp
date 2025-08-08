@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MeetingMind - AI 회의 인사이트</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🧠</span>
+                    <h1>MeetingMind</h1>
+                </div>
+                <div class="header-actions">
+                    <button id="settings-btn" class="btn btn-ghost">
+                        <span>⚙️</span>
+                        설정
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Welcome Screen (shown initially) -->
+            <div id="welcome-screen" class="welcome-screen">
+                <div class="welcome-content">
+                    <div class="welcome-hero">
+                        <h2>AI가 분석하는 똑똑한 회의</h2>
+                        <p>실시간으로 회의 내용을 분석하고, 핵심 포인트와 액션 아이템을 자동으로 추출합니다.</p>
+                    </div>
+                    
+                    <div class="meeting-setup">
+                        <h3>새 회의 시작하기</h3>
+                        <form id="meeting-form" class="meeting-form">
+                            <div class="form-group">
+                                <label for="meeting-title">회의 제목</label>
+                                <input 
+                                    type="text" 
+                                    id="meeting-title" 
+                                    name="title" 
+                                    placeholder="예: 주간 팀 미팅"
+                                    required
+                                >
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="participants">참석자 (쉼표로 구분)</label>
+                                <input 
+                                    type="text" 
+                                    id="participants" 
+                                    name="participants" 
+                                    placeholder="예: 김철수, 이영희, 박민수"
+                                >
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="duration">예상 시간 (분)</label>
+                                <select id="duration" name="duration">
+                                    <option value="30">30분</option>
+                                    <option value="60" selected>1시간</option>
+                                    <option value="90">1시간 30분</option>
+                                    <option value="120">2시간</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary btn-large">
+                                <span>🚀</span>
+                                회의 시작하기
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <div class="features-preview">
+                        <h3>주요 기능</h3>
+                        <div class="features-grid">
+                            <div class="feature-card">
+                                <div class="feature-icon">🎤</div>
+                                <h4>실시간 음성 인식</h4>
+                                <p>브라우저 내장 음성 인식으로 발언을 실시간 텍스트 변환</p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">🤖</div>
+                                <h4>AI 인사이트 분석</h4>
+                                <p>Gemini AI가 핵심 포인트와 의사결정 사항을 자동 추출</p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">📋</div>
+                                <h4>액션 아이템 생성</h4>
+                                <p>담당자와 기한이 포함된 할일을 자동으로 생성 및 추적</p>
+                            </div>
+                            <div class="feature-card">
+                                <div class="feature-icon">📊</div>
+                                <h4>회의 효율성 분석</h4>
+                                <p>참석자 기여도와 회의 품질을 데이터로 분석</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Meeting Interface (shown during meeting) -->
+            <div id="meeting-interface" class="meeting-interface" style="display: none;">
+                <!-- Meeting Header -->
+                <div class="meeting-header">
+                    <div class="meeting-info">
+                        <h2 id="current-meeting-title">회의 제목</h2>
+                        <div class="meeting-meta">
+                            <span id="meeting-timer" class="meeting-timer">00:00</span>
+                            <span id="participant-count" class="participant-count">참석자 0명</span>
+                            <span id="connection-status" class="connection-status connected">연결됨</span>
+                        </div>
+                    </div>
+                    <div class="meeting-controls">
+                        <button id="toggle-recording" class="btn btn-primary">
+                            <span id="recording-icon">🎤</span>
+                            <span id="recording-text">음성 인식 시작</span>
+                        </button>
+                        <button id="end-meeting" class="btn btn-danger">
+                            <span>⏹️</span>
+                            회의 종료
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Main Meeting Content -->
+                <div class="meeting-content">
+                    <!-- Left Panel: Transcript & Input -->
+                    <div class="left-panel">
+                        <div class="panel-header">
+                            <h3>실시간 대화</h3>
+                            <div class="panel-controls">
+                                <button id="clear-transcript" class="btn btn-ghost btn-small">지우기</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Voice Status -->
+                        <div id="voice-status" class="voice-status" style="display: none;">
+                            <div class="voice-indicator">
+                                <div class="voice-wave"></div>
+                                <div class="voice-wave"></div>
+                                <div class="voice-wave"></div>
+                            </div>
+                            <span>음성을 듣고 있습니다...</span>
+                        </div>
+                        
+                        <!-- Transcript Display -->
+                        <div id="transcript-display" class="transcript-display">
+                            <div class="transcript-placeholder">
+                                회의를 시작하면 여기에 대화 내용이 표시됩니다.
+                            </div>
+                        </div>
+                        
+                        <!-- Manual Text Input -->
+                        <div class="manual-input">
+                            <form id="text-input-form" class="text-input-form">
+                                <div class="input-row">
+                                    <select id="speaker-select" class="speaker-select">
+                                        <option value="">발언자 선택</option>
+                                    </select>
+                                    <input 
+                                        type="text" 
+                                        id="manual-text" 
+                                        placeholder="수동으로 텍스트 입력하기..."
+                                        class="manual-text-input"
+                                    >
+                                    <button type="submit" class="btn btn-primary btn-small">전송</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Right Panel: Insights & Actions -->
+                    <div class="right-panel">
+                        <!-- Insights Tab -->
+                        <div class="panel-tabs">
+                            <button class="tab-button active" data-tab="insights">
+                                <span>💡</span>
+                                인사이트
+                            </button>
+                            <button class="tab-button" data-tab="actions">
+                                <span>📋</span>
+                                액션 아이템
+                            </button>
+                            <button class="tab-button" data-tab="summary">
+                                <span>📊</span>
+                                요약
+                            </button>
+                        </div>
+
+                        <!-- Insights Content -->
+                        <div id="insights-tab" class="tab-content active">
+                            <div class="insights-container">
+                                <div id="insights-list" class="insights-list">
+                                    <div class="insights-placeholder">
+                                        발언이 시작되면 AI가 분석한 인사이트가 여기에 표시됩니다.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Items Content -->
+                        <div id="actions-tab" class="tab-content">
+                            <div class="actions-container">
+                                <div id="actions-list" class="actions-list">
+                                    <div class="actions-placeholder">
+                                        액션 아이템이 감지되면 여기에 표시됩니다.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Summary Content -->
+                        <div id="summary-tab" class="tab-content">
+                            <div class="summary-container">
+                                <div id="summary-content" class="summary-content">
+                                    <div class="summary-placeholder">
+                                        회의가 진행되면 실시간 요약이 여기에 표시됩니다.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay" style="display: none;">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p id="loading-text">회의를 준비하고 있습니다...</p>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>설정</h3>
+                <button class="modal-close" onclick="closeSettings()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>음성 인식 언어</label>
+                    <select id="speech-language">
+                        <option value="ko-KR">한국어</option>
+                        <option value="en-US">English</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>자동 분석</label>
+                    <label class="switch">
+                        <input type="checkbox" id="auto-analysis" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>알림 사운드</label>
+                    <label class="switch">
+                        <input type="checkbox" id="notification-sound" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeSettings()">취소</button>
+                <button class="btn btn-primary" onclick="saveSettings()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
