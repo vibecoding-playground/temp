@@ -25,6 +25,7 @@ from gemini_service import GeminiService
 from websocket_handler import WebSocketManager
 from models import Meeting, ActionItem, MeetingResponse
 from metrics import metrics_collector
+from summary_service import summary_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -287,6 +288,127 @@ async def get_prometheus_metrics():
         content=metrics_collector.get_prometheus_format(),
         media_type="text/plain"
     )
+
+@app.post("/api/meetings/{meeting_id}/summary")
+async def generate_meeting_summary(meeting_id: str, request_data: dict = None):
+    """Generate comprehensive meeting summary report"""
+    try:
+        if meeting_id not in meetings_db:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        meeting = meetings_db[meeting_id]
+        action_items = action_items_db.get(meeting_id, [])
+        
+        # Calculate meeting duration if available
+        duration_minutes = None
+        if meeting.start_time and meeting.end_time:
+            duration = meeting.end_time - meeting.start_time
+            duration_minutes = int(duration.total_seconds() / 60)
+        
+        # Generate summary
+        result = await summary_service.generate_meeting_summary(
+            meeting_id=meeting_id,
+            transcript=meeting.transcript or "",
+            insights=meeting.insights,
+            action_items=[item.dict() for item in action_items],
+            participants=meeting.participants,
+            duration_minutes=duration_minutes
+        )
+        
+        if result.get("success"):
+            metrics_collector.increment("meeting_summaries_generated")
+            return result
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Summary generation failed"))
+            
+    except Exception as e:
+        logger.error(f"Error generating meeting summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/meetings/{meeting_id}/summary/export")
+async def export_meeting_summary(meeting_id: str, format_type: str = "markdown"):
+    """Export meeting summary in specified format"""
+    try:
+        if meeting_id not in meetings_db:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        meeting = meetings_db[meeting_id]
+        action_items = action_items_db.get(meeting_id, [])
+        
+        # Generate summary first
+        summary_result = await summary_service.generate_meeting_summary(
+            meeting_id=meeting_id,
+            transcript=meeting.transcript or "",
+            insights=meeting.insights,
+            action_items=[item.dict() for item in action_items],
+            participants=meeting.participants
+        )
+        
+        if not summary_result.get("success"):
+            raise HTTPException(status_code=500, detail="Failed to generate summary")
+        
+        # Export to requested format
+        export_result = await summary_service.export_summary_to_format(
+            summary_result["data"], format_type
+        )
+        
+        if export_result.get("success"):
+            from fastapi import Response
+            
+            # Set appropriate content type and filename
+            content_types = {
+                "markdown": "text/markdown",
+                "json": "application/json", 
+                "txt": "text/plain"
+            }
+            
+            response = Response(
+                content=export_result["content"],
+                media_type=content_types.get(format_type, "text/plain")
+            )
+            response.headers["Content-Disposition"] = f"attachment; filename={export_result['filename']}"
+            
+            metrics_collector.increment("summary_exports")
+            return response
+        else:
+            raise HTTPException(status_code=500, detail=export_result.get("error", "Export failed"))
+            
+    except Exception as e:
+        logger.error(f"Error exporting meeting summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/meetings/{meeting_id}/summary/preview")
+async def preview_meeting_summary(meeting_id: str):
+    """Get a preview of meeting summary without full generation"""
+    try:
+        if meeting_id not in meetings_db:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        meeting = meetings_db[meeting_id]
+        action_items = action_items_db.get(meeting_id, [])
+        
+        # Create summary preview with basic statistics
+        preview = {
+            "meeting_id": meeting_id,
+            "title": meeting.title,
+            "status": meeting.status,
+            "participants_count": len(meeting.participants),
+            "transcript_length": len(meeting.transcript) if meeting.transcript else 0,
+            "insights_count": len(meeting.insights),
+            "action_items_count": len(action_items),
+            "has_content": bool(meeting.transcript and len(meeting.transcript) > 50),
+            "can_generate_summary": bool(meeting.transcript and len(meeting.transcript) > 100),
+            "last_activity": meeting.updated_at.isoformat() if hasattr(meeting, 'updated_at') else None
+        }
+        
+        return {
+            "success": True,
+            "data": preview
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating meeting summary preview: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     # Load environment variables

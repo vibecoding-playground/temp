@@ -25,7 +25,9 @@ class MetricsCollector:
             "gemini_api_errors": 0,
             "text_analyses_performed": 0,
             "action_items_generated": 0,
-            "insights_generated": 0
+            "insights_generated": 0,
+            "meeting_summaries_generated": 0,
+            "summary_exports": 0
         }
         
     def increment(self, metric_name: str, value: int = 1):
@@ -81,7 +83,8 @@ class MetricsCollector:
         counter_metrics = [
             "meetings_created", "meetings_completed", "gemini_api_calls",
             "gemini_api_errors", "text_analyses_performed", 
-            "action_items_generated", "insights_generated"
+            "action_items_generated", "insights_generated",
+            "meeting_summaries_generated", "summary_exports"
         ]
         
         for metric in counter_metrics:
