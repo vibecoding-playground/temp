@@ -8,3 +8,4 @@ pydantic
 jinja2
 pytest
 pytest-asyncio
+psutil

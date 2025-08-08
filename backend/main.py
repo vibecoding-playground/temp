@@ -24,6 +24,7 @@ load_dotenv("../.env")
 from gemini_service import GeminiService
 from websocket_handler import WebSocketManager
 from models import Meeting, ActionItem, MeetingResponse
+from metrics import metrics_collector
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,8 +45,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+# Mount static files with flexible path handling
+import os
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+frontend_dir = os.path.join(os.path.dirname(backend_dir), "frontend")
+
+if os.path.exists(frontend_dir):
+    app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
+else:
+    # Fallback: create a minimal static handler for testing
+    @app.get("/static/{file_path:path}")
+    async def serve_static_fallback(file_path: str):
+        return {"message": f"Static file {file_path} not available in test mode"}
 
 # Initialize services
 gemini_service = GeminiService()
@@ -59,10 +70,11 @@ action_items_db: Dict[str, List[ActionItem]] = {}
 async def read_root():
     """Serve the main HTML page"""
     try:
-        with open("../frontend/index.html", "r", encoding="utf-8") as f:
+        html_path = os.path.join(frontend_dir, "index.html")
+        with open(html_path, "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
     except FileNotFoundError:
-        return HTMLResponse(content="<h1>MeetingMind</h1><p>Frontend not found</p>")
+        return HTMLResponse(content="<h1>MeetingMind</h1><p>Frontend not available in test mode</p>")
 
 @app.post("/api/meetings", response_model=MeetingResponse)
 async def create_meeting(meeting_data: dict):
@@ -79,6 +91,10 @@ async def create_meeting(meeting_data: dict):
         
         meetings_db[meeting_id] = meeting
         action_items_db[meeting_id] = []
+        
+        # Update metrics
+        metrics_collector.increment("meetings_created")
+        metrics_collector.set_gauge("meetings_active", len([m for m in meetings_db.values() if m.status == "active"]))
         
         logger.info(f"Created meeting: {meeting_id}")
         
@@ -124,13 +140,17 @@ async def analyze_text(data: dict):
             raise HTTPException(status_code=400, detail="Text is required")
         
         # Analyze with Gemini
+        metrics_collector.increment("gemini_api_calls")
         analysis_result = await gemini_service.analyze_meeting_text(
             text=text,
             context={"speaker": speaker, "meeting_id": meeting_id}
         )
         
         if not analysis_result.get("success"):
+            metrics_collector.increment("gemini_api_errors")
             raise HTTPException(status_code=500, detail="Analysis failed")
+        
+        metrics_collector.increment("text_analyses_performed")
         
         # Update meeting transcript
         if meeting_id and meeting_id in meetings_db:
@@ -142,10 +162,15 @@ async def analyze_text(data: dict):
             
             # Add insights
             if "insights" in analysis_result["data"]:
+                insights_count = len(analysis_result["data"]["insights"])
                 meeting.insights.extend(analysis_result["data"]["insights"])
+                metrics_collector.increment("insights_generated", insights_count)
             
             # Add action items
             if "action_items" in analysis_result["data"]:
+                action_items_count = len(analysis_result["data"]["action_items"])
+                metrics_collector.increment("action_items_generated", action_items_count)
+                
                 for item_data in analysis_result["data"]["action_items"]:
                     action_item = ActionItem(
                         meeting_id=meeting_id,
@@ -241,12 +266,27 @@ async def websocket_endpoint(websocket: WebSocket, meeting_id: str):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Enhanced health check endpoint with metrics"""
+    health_status = metrics_collector.get_health_status()
+    return health_status
+
+@app.get("/api/metrics")
+async def get_metrics():
+    """Get application metrics in JSON format"""
     return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "1.0.0"
+        "system": metrics_collector.get_system_metrics(),
+        "application": metrics_collector.get_application_metrics(),
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+@app.get("/metrics")
+async def get_prometheus_metrics():
+    """Get metrics in Prometheus format"""
+    from fastapi import Response
+    return Response(
+        content=metrics_collector.get_prometheus_format(),
+        media_type="text/plain"
+    )
 
 if __name__ == "__main__":
     # Load environment variables

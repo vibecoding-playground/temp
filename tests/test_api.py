@@ -17,7 +17,9 @@ load_dotenv("../.env")
 
 # Add backend to Python path
 import sys
-sys.path.append('../backend')
+import os
+backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend')
+sys.path.insert(0, backend_path)
 
 from main import app
 
